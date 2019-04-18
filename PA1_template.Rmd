@@ -1,25 +1,153 @@
----
-title: "Reproducible Research: Peer Assessment 1"
-output: 
-  html_document:
-    keep_md: true
----
 
+
+Reproducible Research : Course Project 1
+==========================
+
+```{r opts, echo = FALSE}
+knitr::opts_chunk$set(
+  fig.path = "images/",
+  cache = TRUE
+)
+
+```
 
 ## Loading and preprocessing the data
 
-
+```{r Loading and Processing Data}
+url<-"https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip"
+download.file(url,destfile = "activity.zip")
+unzip("./activity.zip", exdir = "./activity")
+act<-read.csv("./activity/activity.csv",na.strings = "NA")
+##Transforming the Date field
+act$date<-as.Date(as.character(act$date),"%Y-%m-%d")
+```
 
 ## What is mean total number of steps taken per day?
 
+```{r Avg Steps taken per day}
 
+## Using tapply function to find total no of steps per day
+stepsum<-with(act,tapply(steps, date, sum,na.rm=T))
+dates<-names(stepsum)
+totalSteps<-as.numeric(stepsum[names(stepsum)])
+steptable<-data.frame(dates,totalSteps)
+
+hist(steptable$totalSteps,main = "Histogram of total steps taken per day",xlab = "Total Steps taken per day", col = "red")
+
+##The mean and median of the total number of steps taken per day
+summary(steptable$totalSteps)
+```
 
 ## What is the average daily activity pattern?
 
+```{r Avg daily activity pattern}
 
+##the average number of steps taken, averaged across all days (y-axis)Second Step per interval
+
+intmean<-with(act,tapply(steps, as.factor(interval), mean,na.rm=T))
+intervals<-names(intmean)
+avgsteps<-as.numeric(intmean[names(intmean)])
+inttable<-data.frame(intervals,avgsteps)
+
+## Plotting the avgsteps across all days w.r.t intervals
+
+plot(intervals,inttable$avgsteps, type="l",col="red")
+
+maxsteps<-max(avgsteps)
+
+##5-minute interval, on average across all the days in the dataset, containing the maximum number of steps
+
+inttable[inttable$avgsteps == maxsteps,]$intervals
+
+```
 
 ## Imputing missing values
 
+```{r Imputting missing values}
 
+##total number of missing values in the dataset
+sum(as.numeric(is.na(act$steps)))
+
+##inputing missing values with the mean of each day
+stepmean<-with(act,tapply(steps, date, mean,na.rm=T))
+dates<-names(stepmean)
+meanSteps<-as.numeric(stepmean[names(stepmean)])
+meanStepTab<-data.frame(dates,meanSteps)
+
+## function to select records with missing value and replacing with the average of that day
+createDataSet<-function(act,meanStepTab){
+  newact<-act
+  for(i in 1:nrow(act)){
+    if(is.na(act[i,1])){
+      date<-act[i,2]
+      tab<-meanStepTab[as.Date(meanStepTab$dates, "%Y-%m-%d") == date,]
+      if(is.nan(tab$meanSteps))
+        tab$meanSteps=0
+      newact[i,1]<-tab$meanSteps
+      newact[i,2]<-tab$dates
+    }
+  }
+  newact
+}
+
+## New Data set
+newact<-createDataSet(act,meanStepTab)
+
+stepsum<-with(newact,tapply(steps, date, sum,na.rm=T))
+dates<-names(stepsum)
+totalSteps<-as.numeric(stepsum[names(stepsum)])
+steptable<-data.frame(dates,totalSteps)
+
+## histogram of the total number of steps taken each day
+hist(steptable$totalSteps,main = "Histogram of total steps taken per day",xlab = "Total Steps taken per day", col = "red")
+
+##mean and median total number of steps taken per day
+summary(steptable$totalSteps)
+
+```
+###As we can see through plot 1 and plot 3 there is no difference from the estimates from the first part of the assignment. There is no impact of imputing missing data on the estimates of the total daily number of steps
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+```{r Activity patterns panel plot}
+
+##Function to Create a new factor variable in the dataset with two levels - "weekday" and "weekend" indicating whether a given date is a weekday or weekend day.
+
+dayfun<-function(newact){
+  newact$day<-c("")
+  for(i in 1:nrow(newact)){
+    day<-weekdays(newact[i,2])
+    if(day == "Saturday" | day == "Sunday")
+      newact[i,4]<-"Weekend"
+    else
+      newact[i,4]<-"Weekday"
+  }
+  newact
+}
+
+newact<-dayfun(newact)
+
+## Making to sets of data to create the required plot for weekdays and weekends
+set1<-subset(newact,day=="Weekend")
+set2<-subset(newact,day=="Weekday")
+
+## Finding the average no of steps as per intervals for making the plot
+
+intmean1<-with(set1,tapply(steps, as.factor(interval), mean,na.rm=T))
+intmean2<-with(set2,tapply(steps, as.factor(interval), mean,na.rm=T))
+intervals<-names(intmean1)
+avgsteps<-as.numeric(intmean1[names(intmean1)])
+inttable1<-data.frame(intervals,avgsteps,day="Weekend",stringsAsFactors = F)
+intervals<-names(intmean2)
+avgsteps<-as.numeric(intmean2[names(intmean2)])
+inttable2<-data.frame(intervals,avgsteps,day="Weekday",stringsAsFactors = F)
+
+## R Binding both the data sets
+
+resulttable<-rbind(inttable1,inttable2)
+
+## Resultant plot
+library(lattice)
+xyplot(avgsteps~as.numeric(intervals)|day,data=resulttable,layout=c(1,2),type="l",xlab = "Intervals", ylab ="No of steps average per interval")
+
+```
